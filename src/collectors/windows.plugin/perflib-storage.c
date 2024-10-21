@@ -6,7 +6,6 @@
 #define _COMMON_PLUGIN_NAME PLUGIN_WINDOWS_NAME
 #define _COMMON_PLUGIN_MODULE_NAME "PerflibStorage"
 #include "../common-contexts/common-contexts.h"
-
 #include "libnetdata/os/windows-wmi/windows-wmi.h"
 
 struct logical_disk {
@@ -588,8 +587,6 @@ static bool do_physical_disk(PERF_DATA_BLOCK *pDataBlock, int update_every, usec
                         update_every,
                         RRDSET_TYPE_LINE
                 );
-
-                rrdset_flag_set(d->st_split, RRDSET_FLAG_DETAIL);
 
                 d->rd_split = rrddim_add(d->st_split, "discards", NULL, 1, 1, RRD_ALGORITHM_INCREMENTAL);
 
