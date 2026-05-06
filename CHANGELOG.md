@@ -134,6 +134,11 @@
 - Cgroups.plugin: fix misleading "cannot open directory" log message ([#22414](https://github.com/netdata/netdata/issues/22414))
 - Adjust vnodes dyncfg availability ([#22415](https://github.com/netdata/netdata/issues/22415))
 - Fix SNMP topology index-derived endpoints ([#22371](https://github.com/netdata/netdata/issues/22371))
+- Docs: fix incorrect Docker nightly tag in switching-install-types.md ([#22306](https://github.com/netdata/netdata/issues/22306))
+- Docs: add note about negative multipliers in Prometheus as-collected export ([#22321](https://github.com/netdata/netdata/issues/22321))
+- Docs: add anomaly rate alerting guidance and cross-references ([#22283](https://github.com/netdata/netdata/issues/22283))
+- Bump repositroy config package version used by kickstart script to the latest. ([#22420](https://github.com/netdata/netdata/issues/22420))
+- Add AI-assistant skills (query-netdata, integrations, learn, agent-events, mirror) ([#22423](https://github.com/netdata/netdata/issues/22423))
 
 ## [2.10.0] - 2026-04-09
 
