@@ -12,6 +12,7 @@ type ProfileMetrics struct {
 	Tags            map[string]string
 	Metrics         []Metric
 	TopologyMetrics []Metric
+	LicenseRows     []LicenseRow
 	HiddenMetrics   []Metric
 	Stats           CollectionStats
 }
@@ -39,6 +40,59 @@ type MetaTag struct {
 	IsExactMatch bool // whether this value is from an exact match context
 }
 
+type LicenseRow struct {
+	OriginProfileID string
+	TableOID        string
+	Table           string
+	RowKey          string
+	StructuralID    string
+
+	ID        string
+	Name      string
+	Feature   string
+	Component string
+	Type      string
+	Impact    string
+
+	IsPerpetual bool
+	IsUnlimited bool
+
+	State         LicenseState
+	Expiry        LicenseTimer
+	Authorization LicenseTimer
+	Certificate   LicenseTimer
+	Grace         LicenseTimer
+	Usage         LicenseUsage
+
+	Tags map[string]string
+}
+
+type LicenseState struct {
+	Has       bool
+	Severity  int64
+	Raw       string
+	Policy    ddprofiledefinition.LicenseStatePolicy
+	SourceOID string
+}
+
+type LicenseTimer struct {
+	Has              bool
+	Timestamp        int64
+	RemainingSeconds int64
+	SourceOID        string
+}
+
+type LicenseUsage struct {
+	HasUsed      bool
+	Used         int64
+	HasCapacity  bool
+	Capacity     int64
+	HasAvailable bool
+	Available    int64
+	HasPercent   bool
+	Percent      int64
+}
+
 // CollectionStats contains statistics for a single profile collection cycle.
 type CollectionStats struct {
 	Timing     TimingStats
@@ -54,12 +108,14 @@ type TimingStats struct {
 	Scalar time.Duration
 	// Table is time spent collecting table metrics.
 	Table time.Duration
+	// Licensing is time spent collecting typed licensing rows.
+	Licensing time.Duration
 	// VirtualMetrics is time spent computing derived/aggregated metrics.
 	VirtualMetrics time.Duration
 }
 
 func (s TimingStats) Total() time.Duration {
-	return s.Scalar + s.Table + s.VirtualMetrics
+	return s.Scalar + s.Table + s.Licensing + s.VirtualMetrics
 }
 
 // SNMPOperationStats captures SNMP protocol-level operations.
@@ -86,9 +142,13 @@ type MetricCountStats struct {
 	Table int64
 	// Virtual is the count of computed/derived metrics.
 	Virtual int64
-	// Tables is the count of unique tables with metrics.
+	// Licensing is the count of typed licensing rows produced.
+	Licensing int64
+	// Tables is the count of unique regular metric tables. Typed licensing
+	// rows are counted separately in Licensing.
 	Tables int64
-	// Rows is the total number of table rows across all tables.
+	// Rows is the total number of regular metric table rows. Typed licensing
+	// rows are counted separately in Licensing.
 	Rows int64
 }
 
@@ -106,8 +166,9 @@ type ErrorStats struct {
 	SNMP int64
 	// Processing is the count of value conversion/transform errors.
 	Processing struct {
-		Scalar int64
-		Table  int64
+		Scalar    int64
+		Table     int64
+		Licensing int64
 	}
 	// MissingOIDs is the count of NoSuchObject/NoSuchName responses.
 	MissingOIDs int64

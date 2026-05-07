@@ -16,8 +16,10 @@ const (
 	prioProfileChart = collectorapi.Priority + iota
 	prioPingRtt
 	prioPingStdDev
+)
 
-	prioInternalStatsTimings
+const (
+	prioInternalStatsTimings = prioLicenseState + 1 + iota
 	prioInternalStatsSnmpOps
 	prioInternalStatsMetrics
 	prioInternalStatsTableCache
@@ -91,6 +93,7 @@ var (
 		Dims: collectorapi.Dims{
 			{ID: "snmp_device_prof_%s_stats_timings_scalar", Name: "scalar"},
 			{ID: "snmp_device_prof_%s_stats_timings_table", Name: "table"},
+			{ID: "snmp_device_prof_%s_stats_timings_licensing", Name: "licensing"},
 			{ID: "snmp_device_prof_%s_stats_timings_virtual", Name: "virtual"},
 		},
 	}
@@ -123,6 +126,7 @@ var (
 			{ID: "snmp_device_prof_%s_stats_metrics_scalar", Name: "scalar"},
 			{ID: "snmp_device_prof_%s_stats_metrics_table", Name: "table"},
 			{ID: "snmp_device_prof_%s_stats_metrics_virtual", Name: "virtual"},
+			{ID: "snmp_device_prof_%s_stats_metrics_licensing", Name: "licensing"},
 			{ID: "snmp_device_prof_%s_stats_metrics_tables", Name: "tables"},
 			{ID: "snmp_device_prof_%s_stats_metrics_rows", Name: "rows"},
 		},
@@ -152,6 +156,7 @@ var (
 			{ID: "snmp_device_prof_%s_stats_errors_snmp", Name: "snmp"},
 			{ID: "snmp_device_prof_%s_stats_errors_processing_scalar", Name: "processing_scalar"},
 			{ID: "snmp_device_prof_%s_stats_errors_processing_table", Name: "processing_table"},
+			{ID: "snmp_device_prof_%s_stats_errors_processing_licensing", Name: "processing_licensing"},
 		},
 	}
 )

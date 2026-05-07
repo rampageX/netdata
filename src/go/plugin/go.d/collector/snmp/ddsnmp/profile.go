@@ -177,6 +177,7 @@ func (p *Profile) merge(base *Profile) error {
 	if err := p.mergeTopology(base); err != nil {
 		return err
 	}
+	p.mergeLicensing(base)
 	// Append other fields as before (these likely don't need deduplication)
 	p.Definition.MetricTags = append(p.Definition.MetricTags, base.Definition.MetricTags...)
 	p.Definition.StaticTags = append(slices.Clone(base.Definition.StaticTags), p.Definition.StaticTags...)
@@ -313,6 +314,20 @@ func (p *Profile) mergeTopology(base *Profile) error {
 	}
 
 	return nil
+}
+
+func (p *Profile) mergeLicensing(base *Profile) {
+	overridden := make(map[string]bool, len(p.Definition.Licensing))
+	for _, row := range p.Definition.Licensing {
+		overridden[ddprofiledefinition.LicenseMergeIdentity(row)] = true
+	}
+
+	for _, row := range base.Definition.Licensing {
+		if overridden[ddprofiledefinition.LicenseMergeIdentity(row)] {
+			continue
+		}
+		p.Definition.Licensing = append(p.Definition.Licensing, row)
+	}
 }
 
 func indexTopologyMergeConflicts(
@@ -506,6 +521,7 @@ func deduplicateMetricsAcrossProfiles(profiles []*Profile) {
 	// Just deduplicate metrics, keeping the first occurrence (most specific)
 	seenMetrics := make(map[string]bool)
 	seenVmetrics := make(map[string]bool)
+	seenLicenseSignals := make(map[string]bool)
 
 	for _, prof := range profiles {
 		if prof.Definition == nil {
@@ -536,6 +552,7 @@ func deduplicateMetricsAcrossProfiles(profiles []*Profile) {
 		)
 
 		deduplicateTopologyInProfile(prof, seenMetrics)
+		deduplicateLicensingInProfile(prof, seenLicenseSignals)
 	}
 }
 
@@ -575,6 +592,63 @@ func deduplicateTopologyInProfile(prof *Profile, seenMetrics map[string]bool) {
 		return
 	}
 	prof.Definition.Topology = filtered
+}
+
+func deduplicateLicensingInProfile(prof *Profile, seenSignals map[string]bool) {
+	filtered := prof.Definition.Licensing[:0]
+	for _, row := range prof.Definition.Licensing {
+		keys := generateLicenseSignalKeys(row)
+		if len(keys) == 0 {
+			filtered = append(filtered, row)
+			continue
+		}
+
+		duplicate := false
+		for _, key := range keys {
+			if seenSignals[key] {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
+			continue
+		}
+		for _, key := range keys {
+			seenSignals[key] = true
+		}
+		filtered = append(filtered, row)
+	}
+	if len(filtered) == 0 {
+		prof.Definition.Licensing = nil
+		return
+	}
+	prof.Definition.Licensing = filtered
+}
+
+func generateLicenseSignalKeys(row ddprofiledefinition.LicensingConfig) []string {
+	identity := ddprofiledefinition.LicenseStructuralIdentity(row)
+	var keys []string
+	add := func(value ddprofiledefinition.LicenseValueConfig) {
+		if value.IsSet() && value.Kind != "" {
+			keys = append(keys, strings.Join([]string{identity, string(value.Kind)}, "|"))
+		}
+	}
+	add(row.State.LicenseValueConfig)
+	addLicenseTimerSignalKeys(row.Signals.Expiry, add)
+	addLicenseTimerSignalKeys(row.Signals.Authorization, add)
+	addLicenseTimerSignalKeys(row.Signals.Certificate, add)
+	addLicenseTimerSignalKeys(row.Signals.Grace, add)
+	add(row.Signals.Usage.Used)
+	add(row.Signals.Usage.Capacity)
+	add(row.Signals.Usage.Available)
+	add(row.Signals.Usage.Percent)
+	return keys
+}
+
+func addLicenseTimerSignalKeys(cfg ddprofiledefinition.LicenseTimerSignalsConfig, add func(ddprofiledefinition.LicenseValueConfig)) {
+	add(cfg.LicenseValueConfig)
+	add(cfg.Timestamp)
+	add(cfg.Remaining)
 }
 
 func generateTopologyScalarMetricKey(topo ddprofiledefinition.TopologyConfig) string {

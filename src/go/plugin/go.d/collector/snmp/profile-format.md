@@ -2184,3 +2184,141 @@ What this does
 - Builds a **single total chart** combining multiple related packet counters.
 - Each `as` becomes a **dimension** (`in_ucast`, `out_ucast`, `in_mcast`, …).
 - No `per_row`/`group_by` → totals aggregated across all interfaces.
+
+## Licensing rows
+
+The SNMP collector ships a **shared device-level licensing pipeline** that
+turns vendor-specific licensing telemetry into six common contexts
+(`snmp.license.remaining_time`, `snmp.license.authorization_remaining_time`,
+`snmp.license.certificate_remaining_time`, `snmp.license.grace_remaining_time`,
+`snmp.license.usage_percent`, `snmp.license.state`) plus an interactive
+`snmp:licenses` drill-down function. Profiles describe licensing telemetry in
+a top-level `licensing:` section. The collector emits typed license rows from
+that section; regular `metrics:` rows are not used as a licensing transport.
+
+### Authoring contract
+
+A licensing row describes one vendor license, entitlement, contract, or
+license pool. A row may be table-backed or scalar-backed:
+
+- A table-backed row declares `table:` and produces one typed license row per
+  SNMP table row.
+- A scalar-backed row omits `table:` and produces one typed license row for the
+  scalar values named in the row.
+- Scalar-backed rows that use only literal `value:` fields must declare an
+  explicit stable `id:` because there is no signal OID to use as structural
+  identity.
+
+Each row has:
+
+- `identity:` fields used by the drill-down: `id`, `name`, `feature`,
+  `component`.
+- `descriptors:` fields: `type`, `impact`, `perpetual`, `unlimited`.
+- `state:` for a normalized state severity (`0` healthy, `1` degraded, `2`
+  broken) plus the raw vendor value.
+- `signals:` for timers and usage:
+  - `expiry.timestamp` / `expiry.remaining`
+  - `authorization.timestamp` / `authorization.remaining`
+  - `certificate.timestamp` / `certificate.remaining`
+  - `grace.timestamp` / `grace.remaining`
+  - `usage.used`, `usage.capacity`, `usage.available`, `usage.percent`
+
+Example table-backed row:
+
+```yaml
+licensing:
+  - id: licensing_blades
+    MIB: CHECKPOINT-MIB
+    table:
+      OID: 1.3.6.1.4.1.2620.1.6.18.1
+      name: licensingTable
+    identity:
+      id:   { OID: 1.3.6.1.4.1.2620.1.6.18.1.1.2, name: licensingID }
+      name: { OID: 1.3.6.1.4.1.2620.1.6.18.1.1.4, name: licensingBladeName }
+      component: { value: blade }
+    descriptors:
+      type: { value: subscription }
+    state:
+      OID: 1.3.6.1.4.1.2620.1.6.18.1.1.5
+      name: licensingState
+      mapping:
+        valid: "0"
+        "about-to-expire": "1"
+        expired: "2"
+    signals:
+      expiry:
+        timestamp:
+          OID: 1.3.6.1.4.1.2620.1.6.18.1.1.6
+          name: licensingExpirationDate
+          sentinel: [timer_u32_max]
+      usage:
+        used:     { OID: 1.3.6.1.4.1.2620.1.6.18.1.1.10, name: licensingUsedQuota }
+        capacity: { OID: 1.3.6.1.4.1.2620.1.6.18.1.1.9,  name: licensingTotalQuota }
+```
+
+Example scalar-backed row:
+
+```yaml
+licensing:
+  - id: routeros_upgrade
+    MIB: MIKROTIK-MIB
+    identity:
+      id: { value: routeros_upgrade }
+      name: { value: RouterOS upgrade entitlement }
+      component: { value: routeros }
+    descriptors:
+      type: { value: upgrade_entitlement }
+    signals:
+      expiry:
+        timestamp:
+          OID: 1.3.6.1.4.1.14988.1.1.4.2.0
+          name: mtxrLicUpgrUntil
+          format: snmp_dateandtime
+          sentinel: [timer_pre_1971]
+```
+
+### Parsing vendor expiry dates
+
+The value-processor format mechanism handles licensing expiry dates directly.
+On each poll, the table collector re-fetches value columns even on table-cache
+hits, so expiry values are decoded from the current poll's PDU instead of from
+cached row metadata.
+
+This does **not** disable the generic SNMP table cache for the surrounding
+table. Same-table `metric_tags` can still come from cached row metadata on
+cache hits. For live licensing state, prefer symbol-based severity and
+timestamp values over same-table text tags whenever the device exposes both.
+Three options are available:
+
+- **No format** — for vendors that publish expiry as a plain integer unix
+  epoch in `Gauge32` / `Counter32` / `Unsigned32`. The numeric value
+  processor reads it directly. Check Point's `licensingExpirationDate` is one
+  example.
+- `format: snmp_dateandtime` — for SNMPv2-TC `DateAndTime` octet strings (8
+  or 11 byte fixed binary). Used by vendors like Blue Coat ProxySG and Cisco
+  `CISCO-LICENSE-MGMT-MIB`.
+- `format: text_date` — for textual date strings (e.g., `2026-12-31`,
+  `Mon Jan 2 2030`, epoch seconds/milliseconds embedded as text). Accepts
+  the same layouts as the licensing pipeline's internal date parser. Used
+  by Fortinet's `DisplayString` expiry columns.
+
+The decoded unix timestamp is stored in the typed timer. The licensing
+projection can drop known "no expiry" sentinels before the consumer sees them.
+Supported sentinel policies are:
+
+- `timer_zero_or_negative`
+- `timer_u32_max`
+- `timer_pre_1971`
+
+### Identity and indexes
+
+For table rows, the collector keeps structural identity from the profile,
+table OID, and SNMP row index. Human-readable identity fields are for display
+and grouping in the drill-down. For `not-accessible` index objects, derive the
+identity from the row index:
+
+```yaml
+identity:
+  id:
+    index: 1
+```
