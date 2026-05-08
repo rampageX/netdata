@@ -148,6 +148,17 @@
 - Fix sender replication counter leak on obsolete charts ([#22428](https://github.com/netdata/netdata/issues/22428))
 - Refactor(snmp): clean up profile projection and topology tests ([#22433](https://github.com/netdata/netdata/issues/22433))
 - Fix based on Coverity and Sonar audits (part 3) ([#22331](https://github.com/netdata/netdata/issues/22331))
+- Fix based on Coverity and Sonar audits (part 11) ([#22339](https://github.com/netdata/netdata/issues/22339))
+- Fix memory ordering for aclk_host_config publish ([#22429](https://github.com/netdata/netdata/issues/22429))
+- Do not coerce ints to doubles during flattening. ([#22418](https://github.com/netdata/netdata/issues/22418))
+- Network Flows: docs rewrite, integrations, benchmarks ([#22439](https://github.com/netdata/netdata/issues/22439))
+- Fix SIGSEGV in ctx_hosts_load during shutdown     ([#22419](https://github.com/netdata/netdata/issues/22419))
+- Network Flows: fix MDX deploy preview + capture MDX gotchas in skills ([#22445](https://github.com/netdata/netdata/issues/22445))
+- Refactor chart/dim/label cleanup functions ([#22435](https://github.com/netdata/netdata/issues/22435))
+- Fix eBPF FD PID map iteration ([#22436](https://github.com/netdata/netdata/issues/22436))
+- Fix based on Coverity and Sonar audits (part 7) ([#22335](https://github.com/netdata/netdata/issues/22335))
+- SNMP: add network device licensing monitoring ([#22122](https://github.com/netdata/netdata/issues/22122))
+- Repair Network Flows documentation ([#22449](https://github.com/netdata/netdata/issues/22449))
 
 ## [2.10.0] - 2026-04-09
 
