@@ -74,6 +74,82 @@ async fn e2e_ingest_writes_journals_and_query_reads_flows() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn e2e_timestamp_source_first_switched_is_persisted_as_source_timestamp() {
+    let (cfg, _metrics, open_tiers, _tier_flow_indexes, _tmp) =
+        ingest_fixture_with_timestamp_source(
+            "nfv5.pcap",
+            plugin_config::TimestampSource::NetflowFirstSwitched,
+        )
+        .await;
+    let fields = first_raw_journal_fields(&cfg.journal.raw_tier_dir());
+
+    let source_ts = fields
+        .get("_SOURCE_REALTIME_TIMESTAMP")
+        .expect("missing _SOURCE_REALTIME_TIMESTAMP in raw journal entry");
+    let flow_start = fields
+        .get("FLOW_START_USEC")
+        .expect("missing FLOW_START_USEC in raw journal entry");
+    assert_eq!(
+        source_ts, flow_start,
+        "expected timestamp_source=netflow_first_switched to persist the decoded flow start as _SOURCE_REALTIME_TIMESTAMP"
+    );
+
+    let source_usec = source_ts
+        .parse::<u64>()
+        .expect("source timestamp should be a usec integer");
+    let raw_entry_realtime = first_journal_realtime_usec(&cfg.journal.raw_tier_dir());
+    assert!(
+        raw_entry_realtime > source_usec,
+        "raw journal entry realtime should remain receive/write time, not decoded source time"
+    );
+
+    let expected_minute_1_bucket = bucket_start_usec(raw_entry_realtime, 60_000_000);
+    let minute_1_timestamps = journal_source_realtime_timestamps(&cfg.journal.minute_1_tier_dir());
+    assert!(
+        timestamps_include_bucket(&minute_1_timestamps, expected_minute_1_bucket, 60_000_000)
+            || open_tier_includes_bucket(&open_tiers, expected_minute_1_bucket, 60_000_000),
+        "live materialized tiers should bucket timestamp_source=netflow_first_switched by journal receive time"
+    );
+
+    for tier_dir in [
+        cfg.journal.minute_1_tier_dir(),
+        cfg.journal.minute_5_tier_dir(),
+        cfg.journal.hour_1_tier_dir(),
+    ] {
+        if tier_dir.exists() {
+            fs::remove_dir_all(&tier_dir)
+                .unwrap_or_else(|err| panic!("remove tier dir {}: {}", tier_dir.display(), err));
+        }
+    }
+
+    let rebuild_metrics = Arc::new(ingest::IngestMetrics::default());
+    let rebuild_open_tiers = Arc::new(RwLock::new(tiering::OpenTierState::default()));
+    let rebuild_tier_flow_indexes = Arc::new(RwLock::new(tiering::TierFlowIndexStore::default()));
+    let mut rebuild_service = ingest::IngestService::new(
+        cfg.clone(),
+        Arc::clone(&rebuild_metrics),
+        Arc::clone(&rebuild_open_tiers),
+        Arc::clone(&rebuild_tier_flow_indexes),
+    )
+    .expect("create rebuild ingest service");
+    rebuild_service
+        .rebuild_materialized_from_raw_for_test()
+        .await
+        .expect("rebuild materialized tiers from raw");
+
+    let rebuilt_minute_1_timestamps =
+        journal_source_realtime_timestamps(&cfg.journal.minute_1_tier_dir());
+    assert!(
+        timestamps_include_bucket(
+            &rebuilt_minute_1_timestamps,
+            expected_minute_1_bucket,
+            60_000_000
+        ) || open_tier_includes_bucket(&rebuild_open_tiers, expected_minute_1_bucket, 60_000_000),
+        "rebuild should replay recently received raw entries into receive-time materialized buckets"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn e2e_query_service_timeseries_path_returns_chart_data() {
     let (cfg, _metrics, _open_tiers, _tier_flow_indexes, _tmp) = ingest_fixture("nfv5.pcap").await;
     let (query_service, _notify_rx) = query::FlowQueryService::new(&cfg)
@@ -1603,6 +1679,140 @@ fn assert_tier_dir_exists(path: &Path, tier_name: &str) {
     );
 }
 
+fn first_raw_journal_fields(path: &Path) -> HashMap<String, String> {
+    for file_path in journal_files(path) {
+        let repo_file =
+            RepoFile::from_path(&file_path).expect("parse raw journal repository metadata");
+        let journal =
+            JournalFile::<Mmap>::open(&repo_file, 8 * 1024 * 1024).expect("open raw journal file");
+        let mut reader = JournalReader::default();
+        reader.set_location(Location::Head);
+        if !reader
+            .step(&journal, Direction::Forward)
+            .expect("step raw journal reader")
+        {
+            continue;
+        }
+
+        let mut data_offsets = Vec::<NonZeroU64>::new();
+        reader
+            .entry_data_offsets(&journal, &mut data_offsets)
+            .expect("enumerate raw journal data offsets");
+        let mut fields = HashMap::new();
+        let mut decompress_buf = Vec::new();
+        query::visit_journal_payloads(
+            &journal,
+            &file_path,
+            &data_offsets,
+            &mut decompress_buf,
+            |payload| {
+                if let Some(eq_pos) = payload.iter().position(|&b| b == b'=') {
+                    let key = String::from_utf8_lossy(&payload[..eq_pos]).into_owned();
+                    let value = String::from_utf8_lossy(&payload[eq_pos + 1..]).into_owned();
+                    fields.insert(key, value);
+                }
+                Ok(())
+            },
+        )
+        .expect("read raw journal payloads");
+        return fields;
+    }
+
+    panic!(
+        "expected at least one raw journal entry in {}",
+        path.display()
+    );
+}
+
+fn first_journal_realtime_usec(path: &Path) -> u64 {
+    for file_path in journal_files(path) {
+        let repo_file = RepoFile::from_path(&file_path).expect("parse journal repository metadata");
+        let journal =
+            JournalFile::<Mmap>::open(&repo_file, 8 * 1024 * 1024).expect("open journal file");
+        let mut reader = JournalReader::default();
+        reader.set_location(Location::Head);
+        if !reader
+            .step(&journal, Direction::Forward)
+            .expect("step journal reader")
+        {
+            continue;
+        }
+
+        return reader
+            .get_realtime_usec(&journal)
+            .expect("read journal entry realtime timestamp");
+    }
+
+    panic!("expected at least one journal entry in {}", path.display());
+}
+
+fn journal_source_realtime_timestamps(path: &Path) -> Vec<u64> {
+    let mut timestamps = Vec::new();
+    for file_path in journal_files(path) {
+        let repo_file = RepoFile::from_path(&file_path).expect("parse journal repository metadata");
+        let journal =
+            JournalFile::<Mmap>::open(&repo_file, 8 * 1024 * 1024).expect("open journal file");
+        let mut reader = JournalReader::default();
+        reader.set_location(Location::Head);
+        let mut decompress_buf = Vec::new();
+        loop {
+            if !reader
+                .step(&journal, Direction::Forward)
+                .expect("step journal reader")
+            {
+                break;
+            }
+
+            let mut data_offsets = Vec::<NonZeroU64>::new();
+            reader
+                .entry_data_offsets(&journal, &mut data_offsets)
+                .expect("enumerate journal data offsets");
+            query::visit_journal_payloads(
+                &journal,
+                &file_path,
+                &data_offsets,
+                &mut decompress_buf,
+                |payload| {
+                    if let Some(value) = payload.strip_prefix(b"_SOURCE_REALTIME_TIMESTAMP=")
+                        && let Ok(value) = String::from_utf8_lossy(value).parse::<u64>()
+                    {
+                        timestamps.push(value);
+                    }
+                    Ok(())
+                },
+            )
+            .expect("read journal payloads");
+        }
+    }
+
+    timestamps
+}
+
+fn bucket_start_usec(timestamp_usec: u64, bucket_usec: u64) -> u64 {
+    timestamp_usec
+        .saturating_div(bucket_usec)
+        .saturating_mul(bucket_usec)
+}
+
+fn timestamps_include_bucket(timestamps: &[u64], bucket_start: u64, bucket_usec: u64) -> bool {
+    timestamps
+        .iter()
+        .any(|timestamp| bucket_start_usec(*timestamp, bucket_usec) == bucket_start)
+}
+
+fn open_tier_includes_bucket(
+    open_tiers: &Arc<RwLock<tiering::OpenTierState>>,
+    bucket_start: u64,
+    bucket_usec: u64,
+) -> bool {
+    open_tiers
+        .read()
+        .expect("read open tiers")
+        .minute_1
+        .iter()
+        .any(|row| bucket_start_usec(row.timestamp_usec, bucket_usec) == bucket_start)
+}
+
 fn tier_file_count(path: &Path) -> usize {
     fn count_journal_files(path: &Path) -> usize {
         fs::read_dir(path)
@@ -1624,4 +1834,30 @@ fn tier_file_count(path: &Path) -> usize {
     }
 
     count_journal_files(path)
+}
+
+fn journal_files(path: &Path) -> Vec<PathBuf> {
+    fn collect(path: &Path, files: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(path)
+            .unwrap_or_else(|err| panic!("read journal dir {}: {}", path.display(), err))
+            .filter_map(Result::ok)
+        {
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                collect(&entry_path, files);
+            } else if entry_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext == "journal")
+                .unwrap_or(false)
+            {
+                files.push(entry_path);
+            }
+        }
+    }
+
+    let mut files = Vec::new();
+    collect(path, &mut files);
+    files.sort();
+    files
 }
