@@ -159,6 +159,13 @@
 - Fix based on Coverity and Sonar audits (part 7) ([#22335](https://github.com/netdata/netdata/issues/22335))
 - SNMP: add network device licensing monitoring ([#22122](https://github.com/netdata/netdata/issues/22122))
 - Repair Network Flows documentation ([#22449](https://github.com/netdata/netdata/issues/22449))
+- Add 'nfds' Monitoring and Fix FD Bug in apps.plugin ([#22447](https://github.com/netdata/netdata/issues/22447))
+- Regenerate integrations docs ([#22444](https://github.com/netdata/netdata/issues/22444))
+- Disable compression for GHA artifact uploads of compressed files. ([#22441](https://github.com/netdata/netdata/issues/22441))
+- Render flow integration content sections ([#22454](https://github.com/netdata/netdata/issues/22454))
+- Fix metadata Learn links ([#22455](https://github.com/netdata/netdata/issues/22455))
+- Fix rrdcontext metadata leak on non-dbengine hosts ([#22438](https://github.com/netdata/netdata/issues/22438))
+- Test netflow enrichment paths ([#22453](https://github.com/netdata/netdata/issues/22453))
 
 ## [2.10.0] - 2026-04-09
 
