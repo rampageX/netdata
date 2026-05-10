@@ -166,6 +166,10 @@
 - Fix metadata Learn links ([#22455](https://github.com/netdata/netdata/issues/22455))
 - Fix rrdcontext metadata leak on non-dbengine hosts ([#22438](https://github.com/netdata/netdata/issues/22438))
 - Test netflow enrichment paths ([#22453](https://github.com/netdata/netdata/issues/22453))
+- Fix shutdown race when restoring alert information from the database ([#22448](https://github.com/netdata/netdata/issues/22448))
+- Add SNMP BGP monitoring ([#22170](https://github.com/netdata/netdata/issues/22170))
+- Regenerate integrations docs ([#22457](https://github.com/netdata/netdata/issues/22457))
+- Adjust MCP shutdown sequence ([#22452](https://github.com/netdata/netdata/issues/22452))
 
 ## [2.10.0] - 2026-04-09
 
