@@ -170,6 +170,12 @@
 - Add SNMP BGP monitoring ([#22170](https://github.com/netdata/netdata/issues/22170))
 - Regenerate integrations docs ([#22457](https://github.com/netdata/netdata/issues/22457))
 - Adjust MCP shutdown sequence ([#22452](https://github.com/netdata/netdata/issues/22452))
+- Build(deps): bump github.com/tidwall/gjson from 1.18.0 to 1.19.0 in /src/go ([#22464](https://github.com/netdata/netdata/issues/22464))
+- Build(deps): bump github.com/fsnotify/fsnotify from 1.10.0 to 1.10.1 in /src/go ([#22463](https://github.com/netdata/netdata/issues/22463))
+- Build(deps): bump github.com/redis/go-redis/v9 from 9.18.0 to 9.19.0 in /src/go ([#22465](https://github.com/netdata/netdata/issues/22465))
+- Build(deps): bump actions/add-to-project from 1.0.2 to 2.0.0 ([#22461](https://github.com/netdata/netdata/issues/22461))
+- Build(deps): bump golang.org/x/text from 0.36.0 to 0.37.0 in /src/go ([#22462](https://github.com/netdata/netdata/issues/22462))
+- Docs: update docs/add-advanced-api-query-example-force ([#22450](https://github.com/netdata/netdata/issues/22450))
 
 ## [2.10.0] - 2026-04-09
 
