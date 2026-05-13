@@ -176,6 +176,7 @@
 - Build(deps): bump actions/add-to-project from 1.0.2 to 2.0.0 ([#22461](https://github.com/netdata/netdata/issues/22461))
 - Build(deps): bump golang.org/x/text from 0.36.0 to 0.37.0 in /src/go ([#22462](https://github.com/netdata/netdata/issues/22462))
 - Docs: update docs/add-advanced-api-query-example-force ([#22450](https://github.com/netdata/netdata/issues/22450))
+- Fix(ap): handle SSIDs containing whitespace ([#22472](https://github.com/netdata/netdata/issues/22472))
 
 ## [2.10.0] - 2026-04-09
 
