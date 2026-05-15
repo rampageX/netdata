@@ -180,6 +180,8 @@
 - Fix DBENGINE PGC races in pgc_page_add and pgc_queue_del ([#22466](https://github.com/netdata/netdata/issues/22466))
 - Remove redundant per-host replication gate from obsolete chart cleanup ([#22467](https://github.com/netdata/netdata/issues/22467))
 - Improve hosts load on agent startup ([#22446](https://github.com/netdata/netdata/issues/22446))
+- Improve child to parent provided ML trained data ([#22156](https://github.com/netdata/netdata/issues/22156))
+- Update bundled static curl to 8.20.0 ([#22473](https://github.com/netdata/netdata/issues/22473))
 
 ## [2.10.0] - 2026-04-09
 
