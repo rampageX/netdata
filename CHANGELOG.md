@@ -182,6 +182,8 @@
 - Improve hosts load on agent startup ([#22446](https://github.com/netdata/netdata/issues/22446))
 - Improve child to parent provided ML trained data ([#22156](https://github.com/netdata/netdata/issues/22156))
 - Update bundled static curl to 8.20.0 ([#22473](https://github.com/netdata/netdata/issues/22473))
+- Feat(integrations): add collector taxonomy framework POC ([#22489](https://github.com/netdata/netdata/issues/22489))
+- Docs: task class: improve_docs — add a 'check status' section to the service [surgical_edit] ([#22485](https://github.com/netdata/netdata/issues/22485))
 
 ## [2.10.0] - 2026-04-09
 
